@@ -1,4 +1,4 @@
-# Loctree LSP 0.13.0
+# Loctree LSP 0.13.1
 
 This repository is the public release mirror for the Loctree language server.
 
