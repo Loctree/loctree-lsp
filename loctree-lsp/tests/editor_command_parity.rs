@@ -69,6 +69,14 @@ fn jetbrains_router_handles(commands: &BTreeSet<String>) -> Vec<String> {
 
 #[test]
 fn lsp_emitted_loctree_commands_have_vscode_and_jetbrains_contributions() {
+    // The editor clients live only in the integration monorepo; the public
+    // engine-bundle mirror ships loctree-lsp without editors/, so the parity
+    // guard has nothing to check there. In the suite editors/ always exists,
+    // so this skip never weakens the real gate.
+    if !repo_root().join("editors").is_dir() {
+        eprintln!("skipping editor command parity: no editors/ tree in this checkout");
+        return;
+    }
     let emitted = extract_lsp_emitted_commands(&[
         "loctree-lsp/src/actions/refactor.rs",
         "loctree-lsp/src/actions/quickfix.rs",
@@ -95,4 +103,56 @@ fn lsp_emitted_loctree_commands_have_vscode_and_jetbrains_contributions() {
         missing_router.is_empty(),
         "JetBrains LoctreeLspCommandRouter missing when branches: {missing_router:?}"
     );
+}
+
+#[test]
+fn editor_runtime_resolution_contract_is_kept_in_parity() {
+    if !repo_root().join("editors").is_dir() {
+        eprintln!("skipping editor runtime parity: no editors/ tree in this checkout");
+        return;
+    }
+
+    let vscode_client = fs::read_to_string(repo_root().join("editors/vscode/src/client.ts"))
+        .expect("read VS Code runtime resolver");
+    let vscode_status = fs::read_to_string(repo_root().join("editors/vscode/src/statusbar.ts"))
+        .expect("read VS Code runtime status");
+    let jetbrains_resolver = fs::read_to_string(
+        repo_root()
+            .join("editors/jetbrains/src/main/kotlin/io/loct/intellij/binary/BinaryResolver.kt"),
+    )
+    .expect("read JetBrains runtime resolver");
+    let jetbrains_status = fs::read_to_string(repo_root().join(
+        "editors/jetbrains/src/main/kotlin/io/loct/intellij/statusbar/LoctreeStatusBarWidget.kt",
+    ))
+    .expect("read JetBrains runtime status");
+    let neovim = fs::read_to_string(repo_root().join("editors/nvim/loctree.lua"))
+        .expect("read Neovim runtime resolver");
+
+    for (name, resolver) in [
+        ("VS Code", vscode_client.as_str()),
+        ("JetBrains", jetbrains_resolver.as_str()),
+        ("Neovim", neovim.as_str()),
+    ] {
+        assert!(
+            resolver.contains(".local") && resolver.contains("--version"),
+            "{name} must prefer the canonical user install and probe runtime identity"
+        );
+        assert!(
+            resolver.contains("Loctree runtime PATH shadowing:"),
+            "{name} must use the shared PATH-shadow warning contract"
+        );
+    }
+
+    for (name, status) in [
+        ("VS Code", vscode_status.as_str()),
+        ("JetBrains", jetbrains_status.as_str()),
+        ("Neovim", neovim.as_str()),
+    ] {
+        assert!(
+            status.contains("Binary:")
+                && status.contains("Identity:")
+                && status.contains("Source:"),
+            "{name} status surface must expose exact runtime provenance"
+        );
+    }
 }

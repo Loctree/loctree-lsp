@@ -1,3 +1,4 @@
+#[path = "build/build_support.rs"]
 mod build_support;
 
 use std::process::Command;
@@ -12,12 +13,20 @@ fn git(args: &[&str]) -> Option<String> {
     (!value.is_empty()).then(|| value.to_owned())
 }
 
+fn env_value(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=build_support.rs");
+    println!("cargo:rerun-if-changed=build/build_support.rs");
     for name in [
         "LOCTREE_LSP_GIT_COMMIT",
         "LOCTREE_LSP_GIT_DIRTY",
+        "LOCTREE_LSP_GIT_DESCRIBE",
         "LOCTREE_LSP_BUILD_VERSION",
     ] {
         println!("cargo:rerun-if-env-changed={name}");
@@ -32,26 +41,27 @@ fn main() {
             println!("cargo:rerun-if-changed={common_dir}/{head_ref}");
         }
     }
-    let commit = std::env::var("LOCTREE_LSP_GIT_COMMIT")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
+    let commit = env_value("LOCTREE_LSP_GIT_COMMIT")
         .or_else(|| git(&["rev-parse", "--short=8", "HEAD"]))
         .unwrap_or_else(|| "unknown".to_owned());
-    let dirty = std::env::var("LOCTREE_LSP_GIT_DIRTY")
-        .ok()
-        .map(|value| matches!(value.trim(), "1" | "true" | "yes" | "dirty"))
+    let dirty = env_value("LOCTREE_LSP_GIT_DIRTY")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "yes" | "dirty"))
         .unwrap_or_else(|| {
-            git(&["status", "--porcelain"]).is_some_and(|status| !status.is_empty())
+            git(&["status", "--porcelain"])
+                .map(|status| !status.is_empty())
+                .unwrap_or(false)
         });
+    let describe = env_value("LOCTREE_LSP_GIT_DESCRIBE")
+        .or_else(|| git(&["describe", "--always", "--dirty", "--tags"]))
+        .unwrap_or_else(|| commit.clone());
     let package_version = std::env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| "0.0.0".to_owned());
-    let build_version = std::env::var("LOCTREE_LSP_BUILD_VERSION")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
+    let build_version = env_value("LOCTREE_LSP_BUILD_VERSION")
         .unwrap_or_else(|| build_support::format_build_version(&package_version, &commit, dirty));
     println!("cargo:rustc-env=LOCTREE_LSP_GIT_COMMIT={commit}");
     println!(
         "cargo:rustc-env=LOCTREE_LSP_GIT_DIRTY={}",
         if dirty { "1" } else { "0" }
     );
+    println!("cargo:rustc-env=LOCTREE_LSP_GIT_DESCRIBE={describe}");
     println!("cargo:rustc-env=LOCTREE_LSP_BUILD_VERSION={build_version}");
 }

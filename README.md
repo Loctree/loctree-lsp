@@ -1,8 +1,8 @@
-# Loctree LSP 0.13.1
+# Loctree LSP 0.15.0
 
-This repository is the public release mirror for the Loctree language server.
+This repository is the public home of the Loctree language server.
 
-The language server brings Loctree structural intelligence into editor integrations. This is a release mirror of a private integration monorepo; issues/PRs welcome here.
+The language server brings Loctree structural intelligence into editor integrations. Issues and pull requests are welcome here.
 
 ## Build
 
