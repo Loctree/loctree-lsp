@@ -1,4 +1,4 @@
-# Loctree LSP 0.15.0
+# Loctree LSP 0.15.1
 
 This repository is the public home of the Loctree language server.
 
